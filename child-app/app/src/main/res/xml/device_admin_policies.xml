@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin>
+    <uses-policies>
+        <!-- Permite bloquear la pantalla remotamente -->
+        <force-lock />
+        <!-- Permite limpiar el dispositivo (no lo usamos pero lo declaramos) -->
+        <wipe-data />
+        <!-- Controla la contraseña del dispositivo -->
+        <limit-password />
+        <!-- Observa bloqueos de pantalla -->
+        <watch-login />
+        <!-- Bloquea cámara (opcional, para futuras fases) -->
+        <disable-camera />
+    </uses-policies>
+</device-admin>

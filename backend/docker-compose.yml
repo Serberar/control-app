@@ -1,0 +1,73 @@
+services:
+  control-api:
+    build: .
+    container_name: control-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: control-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      MEDIA_PATH: /app/media
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      control-db:
+        condition: service_healthy
+    networks:
+      - control-network
+
+  control-db:
+    image: postgres:16-alpine
+    container_name: control-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # Configuración PostgreSQL con WAL activado y parámetros de producción
+    command: >
+      postgres
+        -c wal_level=replica
+        -c max_wal_senders=3
+        -c wal_keep_size=256
+        -c archive_mode=on
+        -c archive_command='test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f'
+        -c checkpoint_completion_target=0.9
+        -c synchronous_commit=on
+        -c max_connections=100
+        -c shared_buffers=256MB
+        -c effective_cache_size=768MB
+        -c maintenance_work_mem=64MB
+        -c work_mem=4MB
+        -c log_min_duration_statement=1000
+    volumes:
+      # Datos principales — ruta exterior configurable via .env
+      - ${DB_DATA_PATH:-./data/postgres}:/var/lib/postgresql/data
+      # Archivo WAL — ruta exterior configurable via .env
+      - ${DB_WAL_PATH:-./data/wal_archive}:/var/lib/postgresql/wal_archive
+      # Config personalizada (opcional)
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - control-network
+
+volumes:
+  media_data:
+
+networks:
+  control-network:
+    driver: bridge
