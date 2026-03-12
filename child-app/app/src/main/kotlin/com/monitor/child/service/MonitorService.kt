@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.os.BatteryManager
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
@@ -27,6 +28,11 @@ import com.monitor.child.vpn.LocalVpnService
 import com.monitor.child.vpn.VpnDetector
 import com.monitor.child.sim.SimChangeDetector
 import com.monitor.child.appusage.AppUsageSync
+import com.monitor.child.schedule.ScheduleChecker
+import com.monitor.child.accessibility.MessageCaptureService
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import com.monitor.child.admin.DeviceAdminReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -78,7 +84,11 @@ class MonitorService : Service() {
     private lateinit var vpnDetector: VpnDetector
     private lateinit var simChangeDetector: SimChangeDetector
     private lateinit var appUsageSync: AppUsageSync
+    private lateinit var scheduleChecker: ScheduleChecker
     private var wakeLock: PowerManager.WakeLock? = null
+
+    // Intervalo de capturas automáticas (0 = desactivado)
+    private val screenshotIntervalMs = 5 * 60_000L  // 5 minutos por defecto
 
     override fun onCreate() {
         super.onCreate()
@@ -97,6 +107,7 @@ class MonitorService : Service() {
         vpnDetector = VpnDetector(this, apiClient, prefs, serviceScope)
         simChangeDetector = SimChangeDetector(this, apiClient, prefs, serviceScope)
         appUsageSync = AppUsageSync(this, apiClient, prefs, serviceScope)
+        scheduleChecker = ScheduleChecker(this, apiClient, prefs, serviceScope)
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -130,6 +141,39 @@ class MonitorService : Service() {
 
             // Sincronizar estadísticas de uso de apps cada hora
             appUsageSync.startSync()
+
+            // Verificar horarios de bloqueo cada minuto
+            scheduleChecker.startChecking()
+
+            // Capturas de pantalla periódicas (via AccessibilityService)
+            serviceScope.launch {
+                while (true) {
+                    delay(screenshotIntervalMs)
+                    MessageCaptureService.instance?.requestScreenshot()
+                }
+            }
+
+            // Heartbeat cada 5 min: renueva WakeLock + envía nivel de batería
+            serviceScope.launch {
+                while (true) {
+                    delay(5 * 60_000L)
+                    renewWakeLock()
+                    val battery = (getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
+                        .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                        .takeIf { it >= 0 }
+                    apiClient.sendHeartbeat(battery, null)
+                }
+            }
+
+            // Bloqueo remoto al recibir orden por WebSocket
+            webSocketManager.onLockDevice = {
+                val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                val admin = ComponentName(this@MonitorService, DeviceAdminReceiver::class.java)
+                if (dpm.isAdminActive(admin)) {
+                    dpm.lockNow()
+                    Log.i(TAG, "Pantalla bloqueada por orden remota")
+                }
+            }
 
             // Sincronización inicial: llamadas y contactos
             contactsSync.syncIfChanged()
@@ -208,6 +252,19 @@ class MonitorService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "MonitorService::WakeLock"
         ).also { it.acquire(10 * 60 * 1000L) } // 10 minutos, se renueva en heartbeat
+    }
+
+    private fun renewWakeLock() {
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "MonitorService::WakeLock"
+            ).also { it.acquire(10 * 60 * 1000L) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error renovando WakeLock: ${e.message}")
+        }
     }
 
     private fun scheduleWatchdog() {

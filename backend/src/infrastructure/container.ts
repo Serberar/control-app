@@ -17,6 +17,8 @@ import { PostgreSQLKeywordRepository } from './database/repositories/PostgreSQLK
 import { PostgreSQLGeofenceRepository } from './database/repositories/PostgreSQLGeofenceRepository'
 import { PostgreSQLAppUsageRepository } from './database/repositories/PostgreSQLAppUsageRepository'
 import { PostgreSQLAppRuleRepository } from './database/repositories/PostgreSQLAppRuleRepository'
+import { PostgreSQLScheduleRepository } from './database/repositories/PostgreSQLScheduleRepository'
+import { PostgreSQLScreenshotRepository } from './database/repositories/PostgreSQLScreenshotRepository'
 
 import { LoginUseCase } from '../application/use-cases/auth/LoginUseCase'
 import { RefreshTokenUseCase } from '../application/use-cases/auth/RefreshTokenUseCase'
@@ -43,6 +45,8 @@ import { ManageKeywordsUseCase } from '../application/use-cases/alerts/ManageKey
 import { GeofenceUseCase } from '../application/use-cases/geofence/GeofenceUseCase'
 import { AppUsageUseCase } from '../application/use-cases/appusage/AppUsageUseCase'
 import { AppRulesUseCase } from '../application/use-cases/appusage/AppRulesUseCase'
+import { ScheduleUseCase } from '../application/use-cases/schedule/ScheduleUseCase'
+import { ScreenshotUseCase } from '../application/use-cases/screenshot/ScreenshotUseCase'
 
 import { createAuthRoutes } from './http/routes/authRoutes'
 import { createDeviceRoutes } from './http/routes/deviceRoutes'
@@ -55,6 +59,9 @@ import { createUrlHistoryRoutes } from './http/routes/urlHistoryRoutes'
 import { createAlertRoutes } from './http/routes/alertRoutes'
 import { createGeofenceRoutes } from './http/routes/geofenceRoutes'
 import { createAppRoutes } from './http/routes/appRoutes'
+import { createScheduleRoutes } from './http/routes/scheduleRoutes'
+import { createScreenshotRoutes } from './http/routes/screenshotRoutes'
+import { InactivityCheckJob } from './jobs/InactivityCheckJob'
 import { IWebSocketService } from '../domain/ports/services/IWebSocketService'
 
 export function buildContainer(webSocketService: IWebSocketService) {
@@ -76,6 +83,8 @@ export function buildContainer(webSocketService: IWebSocketService) {
   const geofenceRepository = new PostgreSQLGeofenceRepository()
   const appUsageRepository = new PostgreSQLAppUsageRepository()
   const appRuleRepository = new PostgreSQLAppRuleRepository()
+  const scheduleRepository = new PostgreSQLScheduleRepository()
+  const screenshotRepository = new PostgreSQLScreenshotRepository()
 
   // Casos de uso — auth
   const loginUseCase = new LoginUseCase(userRepository, authService)
@@ -84,7 +93,7 @@ export function buildContainer(webSocketService: IWebSocketService) {
   // Casos de uso — device
   const registerDeviceUseCase = new RegisterDeviceUseCase(deviceRepository, authService)
   const getDevicesUseCase = new GetDevicesUseCase(deviceRepository)
-  const heartbeatUseCase = new HeartbeatUseCase(deviceRepository)
+  const heartbeatUseCase = new HeartbeatUseCase(deviceRepository, triggerAlertUseCase)
 
   // Casos de uso — alertas y palabras clave (antes de location y messages)
   const manageKeywordsUseCase = new ManageKeywordsUseCase(keywordRepository)
@@ -98,6 +107,10 @@ export function buildContainer(webSocketService: IWebSocketService) {
   const appUsageUseCase = new AppUsageUseCase(appUsageRepository)
   const appRulesUseCase = new AppRulesUseCase(appRuleRepository)
 
+  // Casos de uso — horarios y capturas
+  const scheduleUseCase = new ScheduleUseCase(scheduleRepository)
+  const screenshotUseCase = new ScreenshotUseCase(screenshotRepository)
+
   // Casos de uso — location (con geofence check)
   const recordLocationUseCase = new RecordLocationUseCase(locationRepository, deviceRepository, webSocketService, geofenceUseCase, triggerAlertUseCase)
   const getLocationHistoryUseCase = new GetLocationHistoryUseCase(locationRepository, deviceRepository)
@@ -110,7 +123,7 @@ export function buildContainer(webSocketService: IWebSocketService) {
   // Casos de uso — llamadas y contactos
   const saveCallLogsUseCase = new SaveCallLogsUseCase(callLogRepository)
   const getCallLogsUseCase = new GetCallLogsUseCase(callLogRepository)
-  const syncContactsUseCase = new SyncContactsUseCase(contactRepository)
+  const syncContactsUseCase = new SyncContactsUseCase(contactRepository, triggerAlertUseCase)
 
   // Casos de uso — media
   const uploadThumbnailUseCase = new UploadThumbnailUseCase(mediaRepository)
@@ -142,6 +155,10 @@ export function buildContainer(webSocketService: IWebSocketService) {
   const alertRoutes = createAlertRoutes(getAlertsUseCase, manageKeywordsUseCase, triggerAlertUseCase)
   const geofenceRoutes = createGeofenceRoutes(geofenceUseCase, getDeviceSummaryUseCase, webSocketService)
   const appRoutes = createAppRoutes(appUsageUseCase, appRulesUseCase)
+  const scheduleRoutes = createScheduleRoutes(scheduleUseCase)
+  const screenshotRoutes = createScreenshotRoutes(screenshotUseCase)
+
+  const inactivityCheckJob = new InactivityCheckJob(deviceRepository, alertRepository, triggerAlertUseCase)
 
   return {
     auth: authRoutes,
@@ -155,5 +172,8 @@ export function buildContainer(webSocketService: IWebSocketService) {
     alerts: alertRoutes,
     geofences: geofenceRoutes,
     apps: appRoutes,
+    schedules: scheduleRoutes,
+    screenshots: screenshotRoutes,
+    inactivityCheckJob,
   }
 }

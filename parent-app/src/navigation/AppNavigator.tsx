@@ -17,6 +17,11 @@ import AlertsScreen from '../screens/AlertsScreen'
 import KeywordsScreen from '../screens/KeywordsScreen'
 import GeofenceScreen from '../screens/GeofenceScreen'
 import DeviceSummaryScreen from '../screens/DeviceSummaryScreen'
+import AppUsageScreen from '../screens/AppUsageScreen'
+import AppRulesScreen from '../screens/AppRulesScreen'
+import SchedulesScreen from '../screens/SchedulesScreen'
+import ScreenshotsScreen from '../screens/ScreenshotsScreen'
+import ContactsScreen from '../screens/ContactsScreen'
 import { MessageApp } from '../types'
 
 export type RootStackParamList = {
@@ -39,6 +44,11 @@ export type RootStackParamList = {
   Keywords: { deviceId: string; deviceName: string }
   Geofences: { deviceId: string; deviceName: string }
   DeviceSummary: { deviceId: string; deviceName: string }
+  AppUsage: { deviceId: string; deviceName: string }
+  AppRules: { deviceId: string; deviceName: string }
+  Schedules: { deviceId: string; deviceName: string }
+  Screenshots: { deviceId: string; deviceName: string }
+  Contacts: { deviceId: string; deviceName: string }
 }
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -134,6 +144,31 @@ export function AppNavigator() {
               name="DeviceSummary"
               component={DeviceSummaryScreen}
               options={({ route }) => ({ title: route.params.deviceName })}
+            />
+            <Stack.Screen
+              name="AppUsage"
+              component={AppUsageScreen}
+              options={({ route }) => ({ title: `Tiempo en pantalla — ${route.params.deviceName}` })}
+            />
+            <Stack.Screen
+              name="AppRules"
+              component={AppRulesScreen}
+              options={({ route }) => ({ title: `Reglas de apps — ${route.params.deviceName}` })}
+            />
+            <Stack.Screen
+              name="Schedules"
+              component={SchedulesScreen}
+              options={({ route }) => ({ title: `Horarios — ${route.params.deviceName}` })}
+            />
+            <Stack.Screen
+              name="Screenshots"
+              component={ScreenshotsScreen}
+              options={({ route }) => ({ title: `Capturas — ${route.params.deviceName}` })}
+            />
+            <Stack.Screen
+              name="Contacts"
+              component={ContactsScreen}
+              options={({ route }) => ({ title: `Contactos — ${route.params.deviceName}` })}
             />
           </>
         )}

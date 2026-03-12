@@ -53,6 +53,11 @@
     <!-- VPN local -->
     <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
 
+    <!-- Detección de apps instaladas (Android 11+) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission"
+        xmlns:tools="http://schemas.android.com/tools" />
+
     <application
         android:name=".ChildApp"
         android:allowBackup="false"
@@ -132,6 +137,17 @@
             android:launchMode="singleTask"
             android:taskAffinity=""
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
+        <!-- Receptor de instalación de nuevas apps -->
+        <receiver
+            android:name=".receiver.PackageInstallReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
 
         <!-- Device Admin Receiver -->
         <receiver

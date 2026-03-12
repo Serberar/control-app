@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { Alert, AlertType, AlertSeverity } from '../../../domain/entities/Alert'
 import { IAlertRepository } from '../../../domain/ports/repositories/IAlertRepository'
+import { IAlertPreferencesRepository } from '../../../domain/ports/repositories/IAlertPreferencesRepository'
 import { IDeviceRepository } from '../../../domain/ports/repositories/IDeviceRepository'
 import { IUserRepository } from '../../../domain/ports/repositories/IUserRepository'
 import { INotificationService } from '../../../domain/ports/services/INotificationService'
@@ -18,12 +19,16 @@ interface TriggerAlertInput {
 export class TriggerAlertUseCase {
   constructor(
     private readonly alertRepository: IAlertRepository,
+    private readonly alertPreferencesRepository: IAlertPreferencesRepository,
     private readonly deviceRepository: IDeviceRepository,
     private readonly userRepository: IUserRepository,
     private readonly notificationService: INotificationService,
   ) {}
 
-  async execute(input: TriggerAlertInput): Promise<Result<Alert>> {
+  async execute(input: TriggerAlertInput): Promise<Result<Alert | null>> {
+    const enabled = await this.alertPreferencesRepository.isEnabled(input.deviceId, input.type)
+    if (!enabled) return Result.ok(null)
+
     const alert = Alert.create({
       id: uuidv4(),
       deviceId: input.deviceId,

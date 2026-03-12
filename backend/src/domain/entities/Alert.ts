@@ -4,6 +4,9 @@ export type AlertType =
   | 'sim_change'
   | 'new_app_installed'
   | 'geofence_exit'
+  | 'battery_low'
+  | 'inactivity'
+  | 'new_contact'
 
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 

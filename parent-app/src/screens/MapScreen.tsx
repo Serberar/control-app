@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, Platform,
+  ActivityIndicator, Alert, Platform, TextInput,
 } from 'react-native'
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps'
 import { NativeStackScreenProps } from '@react-navigation/native-stack'
@@ -25,6 +25,8 @@ export function MapScreen({ route }: Props) {
   const [loading, setLoading] = useState(false)
   const [locatingNow, setLocatingNow] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [timeQuery, setTimeQuery] = useState('')
+  const [timeResult, setTimeResult] = useState<LocationPoint | null>(null)
 
   const mapRef = useRef<MapView>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
@@ -139,6 +141,42 @@ export function MapScreen({ route }: Props) {
     if (d <= new Date()) setSelectedDate(d)
   }
 
+  // ─── Buscar por hora ───────────────────────────────────────────────────
+
+  const searchByTime = () => {
+    const match = timeQuery.match(/^(\d{1,2}):(\d{2})$/)
+    if (!match) {
+      Alert.alert('Formato incorrecto', 'Escribe la hora como HH:MM (p.ej. 19:00)')
+      return
+    }
+    const targetH = parseInt(match[1], 10)
+    const targetM = parseInt(match[2], 10)
+    if (targetH > 23 || targetM > 59) {
+      Alert.alert('Hora inválida', 'Hora debe ser 0–23, minutos 0–59')
+      return
+    }
+    if (historyPoints.length === 0) {
+      Alert.alert('Sin datos', 'No hay puntos de ruta para este día')
+      return
+    }
+    const targetMs = targetH * 3600000 + targetM * 60000
+    let closest = historyPoints[0]
+    let minDiff = Infinity
+    for (const p of historyPoints) {
+      const d = new Date(p.createdAt)
+      const pMs = d.getHours() * 3600000 + d.getMinutes() * 60000 + d.getSeconds() * 1000
+      const diff = Math.abs(pMs - targetMs)
+      if (diff < minDiff) { minDiff = diff; closest = p }
+    }
+    setTimeResult(closest)
+    mapRef.current?.animateToRegion({
+      latitude: closest.latitude,
+      longitude: closest.longitude,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    }, 800)
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────
 
   const currentPoints = viewMode === 'live' ? livePoints : historyPoints
@@ -189,6 +227,16 @@ export function MapScreen({ route }: Props) {
             pinColor="#EF4444"
           />
         )}
+
+        {/* Resultado de búsqueda por hora */}
+        {timeResult && (
+          <Marker
+            coordinate={{ latitude: timeResult.latitude, longitude: timeResult.longitude }}
+            title={format(new Date(timeResult.createdAt), 'HH:mm', { locale: es })}
+            description={timeResult.address ?? `${timeResult.latitude.toFixed(5)}, ${timeResult.longitude.toFixed(5)}`}
+            pinColor="#F59E0B"
+          />
+        )}
       </MapView>
 
       {/* Panel de control */}
@@ -219,6 +267,34 @@ export function MapScreen({ route }: Props) {
             ? `🔴 En vivo — ${livePoints.length} puntos`
             : `${historyPoints.length} puntos registrados`}
         </Text>
+
+        {/* Búsqueda por hora (solo en historial) */}
+        {viewMode === 'history' && (
+          <View style={styles.timeSearch}>
+            <TextInput
+              style={styles.timeInput}
+              placeholder="19:00"
+              placeholderTextColor="#475569"
+              value={timeQuery}
+              onChangeText={(t) => { setTimeQuery(t); if (!t) setTimeResult(null) }}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+            />
+            <TouchableOpacity style={styles.timeBtn} onPress={searchByTime}>
+              <Text style={styles.timeBtnText}>¿Dónde estaba?</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Resultado de hora */}
+        {timeResult && (
+          <View style={styles.timeResultBox}>
+            <Text style={styles.timeResultText}>
+              📍 {format(new Date(timeResult.createdAt), 'HH:mm', { locale: es })}
+              {timeResult.address ? `  —  ${timeResult.address}` : `  —  ${timeResult.latitude.toFixed(5)}, ${timeResult.longitude.toFixed(5)}`}
+            </Text>
+          </View>
+        )}
 
         {/* Botones de acción */}
         <View style={styles.actions}>
@@ -322,6 +398,40 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
+  timeSearch: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  timeInput: {
+    backgroundColor: '#1E293B',
+    color: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+    width: 70,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  timeBtn: {
+    flex: 1,
+    backgroundColor: '#0F766E',
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  timeBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  timeResultBox: {
+    backgroundColor: '#1E293B',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  timeResultText: { color: '#FCD34D', fontSize: 12 },
+
   btnNow: { backgroundColor: '#2563EB' },
   btnLive: { backgroundColor: '#DC2626' },
   btnStop: { backgroundColor: '#7C3AED' },

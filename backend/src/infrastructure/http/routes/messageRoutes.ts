@@ -4,8 +4,10 @@ import { SaveMessagesUseCase } from '../../../application/use-cases/messages/Sav
 import { GetMessagesUseCase } from '../../../application/use-cases/messages/GetMessagesUseCase'
 import { requireAuth, requireDeviceAuth } from '../middleware/authMiddleware'
 
+const APP_ENUM = ['whatsapp', 'telegram', 'instagram', 'sms', 'teams'] as const
+
 const messageSchema = z.object({
-  app: z.enum(['whatsapp', 'telegram', 'instagram', 'sms']),
+  app: z.enum(APP_ENUM),
   contactName: z.string().nullable().optional(),
   contactIdentifier: z.string().min(1),
   direction: z.enum(['incoming', 'outgoing']),
@@ -20,11 +22,18 @@ const batchSchema = z.object({
 
 const querySchema = z.object({
   deviceId: z.string().uuid(),
-  app: z.enum(['whatsapp', 'telegram', 'instagram', 'sms']).optional(),
+  app: z.enum(APP_ENUM).optional(),
   contactIdentifier: z.string().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
+})
+
+const conversationQuerySchema = z.object({
+  deviceId: z.string().uuid(),
+  app: z.enum(APP_ENUM).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
 })
 
 export function createMessageRoutes(
@@ -58,15 +67,20 @@ export function createMessageRoutes(
     res.status(201).json({ ok: true, saved: result.value })
   })
 
-  // GET /messages/conversations — lista de conversaciones del dispositivo
+  // GET /messages/conversations — lista de conversaciones del dispositivo (con filtros opcionales)
   router.get('/conversations', requireAuth, async (req: Request, res: Response) => {
-    const deviceId = req.query.deviceId as string
-    if (!deviceId) {
-      res.status(400).json({ error: 'deviceId requerido' })
+    const parsed = conversationQuerySchema.safeParse(req.query)
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message })
       return
     }
 
-    const result = await getMessagesUseCase.getConversations({ deviceId })
+    const result = await getMessagesUseCase.getConversations({
+      deviceId: parsed.data.deviceId,
+      app: parsed.data.app,
+      from: parsed.data.from ? new Date(parsed.data.from) : undefined,
+      to: parsed.data.to ? new Date(parsed.data.to) : undefined,
+    })
 
     if (!result.ok) {
       res.status(500).json({ error: result.error.message })

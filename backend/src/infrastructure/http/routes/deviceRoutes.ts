@@ -80,6 +80,13 @@ export function createDeviceRoutes(
     res.json({ devices })
   })
 
+  // POST /devices/:id/lock — padre ordena bloquear pantalla inmediatamente
+  router.post('/:id/lock', requireAuth, async (req: Request, res: Response) => {
+    const deviceId = req.params.id
+    const sent = webSocketService.sendToDevice(deviceId, 'device:lock')
+    res.json({ sent })
+  })
+
   // POST /devices/heartbeat — el dispositivo hijo informa que sigue vivo
   router.post('/heartbeat', requireDeviceAuth, async (req: Request, res: Response) => {
     const parsed = heartbeatSchema.safeParse(req.body)

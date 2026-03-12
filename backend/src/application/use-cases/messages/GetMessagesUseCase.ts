@@ -1,9 +1,12 @@
-import { IMessageRepository, MessageFilter, ConversationSummary } from '../../../domain/ports/repositories/IMessageRepository'
+import { IMessageRepository, MessageFilter, ConversationFilter, ConversationSummary } from '../../../domain/ports/repositories/IMessageRepository'
 import { Message, MessageApp } from '../../../domain/entities/Message'
 import { Result } from '../../../shared/types/Result'
 
 interface GetConversationsInput {
   deviceId: string
+  app?: MessageApp
+  from?: Date
+  to?: Date
 }
 
 interface GetMessagesInput {
@@ -19,7 +22,13 @@ export class GetMessagesUseCase {
   constructor(private readonly messageRepository: IMessageRepository) {}
 
   async getConversations(input: GetConversationsInput): Promise<Result<ConversationSummary[]>> {
-    const conversations = await this.messageRepository.findConversations(input.deviceId)
+    const filter: ConversationFilter = {
+      deviceId: input.deviceId,
+      app: input.app,
+      from: input.from,
+      to: input.to,
+    }
+    const conversations = await this.messageRepository.findConversations(filter)
     return Result.ok(conversations)
   }
 

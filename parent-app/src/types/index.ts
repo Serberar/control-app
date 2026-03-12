@@ -22,7 +22,7 @@ export interface LocationPoint {
   createdAt: string
 }
 
-export type MessageApp = 'whatsapp' | 'telegram' | 'instagram' | 'sms'
+export type MessageApp = 'whatsapp' | 'telegram' | 'instagram' | 'sms' | 'teams'
 
 export interface ConversationSummary {
   app: MessageApp
@@ -159,6 +159,26 @@ export interface AppRule {
   ruleType: AppRuleType
   dailyLimitMinutes: number | null
   isActive: boolean
+  createdAt: string
+}
+
+export interface Schedule {
+  id: string
+  deviceId: string
+  name: string
+  activeDays: number   // bitmask: bit0=Dom, bit1=Lun, ..., bit6=Sáb
+  startTime: string    // "HH:MM"
+  endTime: string      // "HH:MM"
+  isActive: boolean
+  createdAt: string
+}
+
+export interface Screenshot {
+  id: string
+  deviceId: string
+  filePath: string
+  fileUrl: string
+  sizeBytes: number | null
   createdAt: string
 }
 

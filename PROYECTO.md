@@ -232,16 +232,16 @@ Requiere acceso físico UNA SOLA VEZ:
 - [x] Captura registro de llamadas normales (`CallLogSync.kt` — cada 30 min)
 - [x] Sincronización lista de contactos (`ContactsSync.kt` — solo si cambia el número)
 - [x] `MessageUploader.kt` — sube mensajes, SMS, llamadas y contactos al backend
-- [ ] Captura llamadas VoIP WhatsApp/Telegram (VoIP via Accessibility — pendiente sesión 8)
+- [~] Captura llamadas VoIP WhatsApp/Telegram — descartado (complejidad alta, Accessibility no expone duración/estado de llamadas en versiones recientes)
 
 #### App Padre ✅
 - [x] `ConversationsScreen` — lista de conversaciones por app (icono y color por app)
 - [x] `ChatDetailScreen` — hilo de mensajes con burbujas entrada/salida
 - [x] `CallsScreen` — registro de llamadas con tipo, origen y duración
 - [x] Accesos rápidos en `DeviceListScreen`: "💬 Mensajes" y "📞 Llamadas" por dispositivo
-- [ ] Filtro por hijo / app / fecha (pendiente sesión 10)
-- [ ] Buscador de palabras clave (pendiente sesión 9)
-- [ ] Lista de contactos del hijo con alerta de nuevos (pendiente sesión 9)
+- [x] Filtro por app y fecha en ConversationsScreen (sesión 14)
+- [~] Buscador de palabras clave en mensajes — cubierto por AlertsScreen (las alertas keyword_match ya muestran el mensaje y contacto)
+- [x] Lista de contactos del hijo (sesión 13)
 
 ---
 
@@ -346,55 +346,116 @@ Requiere acceso físico UNA SOLA VEZ:
 - [x] `ApiService`: `getGeofences()`, `createGeofence()`, `deleteGeofence()`, `setGeofenceActive()`, `getDeviceSummary()`
 - [x] `DeviceListScreen` — tap en tarjeta navega a `DeviceSummaryScreen`; acceso rápido "📍 Zonas"
 
-#### Pendiente (sesiones futuras)
-- [ ] Alertas de batería baja del hijo
-- [ ] Configurar alerta: sin actividad X horas
-- [ ] Configurar alerta: contacto nuevo añadido
+#### Completado
+- [x] Alertas de batería baja del hijo (≤20%, solo al cruzar el umbral)
+- [x] Configurar alerta: sin actividad 24h (job cada hora, anti-spam 12h)
+- [x] Configurar alerta: contacto nuevo añadido (detectado en sincronización)
 
 ---
 
 ### FASE 5 — Control de Apps y Seguridad Avanzada
 > Objetivo: controlar apps, tiempo, horarios y detectar intentos de evasión
 
-#### App Hijo
-- [ ] UsageStatsManager — recoger tiempo de uso por app cada hora
-- [ ] Envío de estadísticas de uso al servidor
-- [ ] Accessibility Service: detectar apertura de app bloqueada
-- [ ] Overlay de bloqueo — pantalla que impide usar la app bloqueada
-- [ ] Control de límite diario por app — bloqueo automático al agotar el tiempo
-- [ ] Scheduler de horarios — bloqueo total según franja horaria
-- [ ] Bloqueo remoto de pantalla vía Device Admin
-- [ ] Detección de instalación de app nueva (Accessibility en Play Store)
-- [ ] Historial YouTube — qué vídeos ve (Accessibility Service en app YouTube)
-- [ ] Historial TikTok — qué vídeos ve (Accessibility Service en app TikTok)
-- [ ] Capturas de pantalla automáticas cada X minutos con pantalla encendida
-- [ ] Capturas de pantalla al abrir apps específicas configurables
+#### Tiempo por app + Bloqueo + Límites + YouTube/TikTok ✅ (Sesión 11)
 
-#### Backend
-- [ ] Endpoints para reglas de bloqueo y horarios
-- [ ] Almacenamiento de estadísticas de uso por app y día
-- [ ] Almacenamiento de capturas de pantalla
-- [ ] Orden de bloqueo remoto vía WebSocket
+##### Backend ✅
+- [x] Entidad `AppUsage` — uso diario por device+package+date; `create()` static factory
+- [x] Entidad `AppRule` — tipos `block` / `time_limit`; `dailyLimitMinutes`; `isActive`
+- [x] `IAppUsageRepository` — `upsert()`, `upsertBatch()`, `findByDevice()`, `findTodayUsage()`
+- [x] `IAppRuleRepository` — `save()`, `findByDevice()`, `findById()`, `delete()`, `setActive()`
+- [x] `PostgreSQLAppUsageRepository` — UPSERT con `ON CONFLICT (device_id, package_name, date)`
+- [x] `PostgreSQLAppRuleRepository` — UPSERT con `ON CONFLICT (id)`
+- [x] `AppUsageUseCase` — `save()`, `getByDevice()`, `getTodayUsage()`
+- [x] `AppRulesUseCase` — `create()`, `list()`, `delete()`, `setActive()`
+- [x] Rutas `POST /api/apps/usage`, `GET /api/apps/usage`, `GET /api/apps/usage/today`
+- [x] Rutas `GET/POST /api/apps/rules`, `DELETE /api/apps/rules/:id`, `PATCH /api/apps/rules/:id/active`
 
-#### App Padre
-- [ ] Panel de tiempo por app — gráficas diarias y semanales
-- [ ] Historial de vídeos vistos en YouTube y TikTok
-- [ ] Visor de capturas de pantalla automáticas por fecha
-- [ ] Gestión de apps bloqueadas (activar/desactivar)
-- [ ] Configurar límites de tiempo por app
-- [ ] Configurar horarios de bloqueo (ej. L-V 9-15h, todos 22-8h)
-- [ ] Botón de bloqueo remoto inmediato
-- [ ] Alerta cuando instala una app nueva
-- [ ] Configurar frecuencia e intervalo de capturas de pantalla
+##### App Hijo ✅
+- [x] `AppUsageSync.kt` — `UsageStatsManager.queryUsageStats()` cada hora; agrupa por package; sube a `/api/apps/usage`
+- [x] `AppBlocker.kt` — descarga reglas cada 15 min; cache local `blockedPackages` + `timeLimitRules`; lanza `BlockedActivity` en bloqueo total o al superar límite diario
+- [x] `BlockedActivity.kt` — pantalla de bloqueo; botón "Volver al inicio"; intercepción del botón Atrás; `launchMode="singleTask"` sin historial
+- [x] `MessageCaptureService.kt` — ampliado: integración con `AppBlocker.onAppForeground()`; parsers YouTube (título del vídeo) y TikTok (descripción + autor)
+- [x] `accessibility_service_config.xml` — añadidos `com.google.android.youtube`, `com.zhiliaoapp.musically`, `com.ss.android.ugc.trill`
+- [x] `MonitorService` — lanza `AppUsageSync.startSync()` al inicio
+- [x] `AndroidManifest.xml` — `BlockedActivity` registrada sin historial (`excludeFromRecents`, `taskAffinity=""`)
+
+##### App Padre ✅
+- [x] `AppUsageScreen` — selector período 1d/7d/30d; tarjeta total de pantalla; ranking de apps con barra proporcional; formato tiempo inteligente (hm/h)
+- [x] `AppRulesScreen` — listado con toggle activo/inactivo; chips tipo bloqueo (🚫/⏱); modal crear regla con chips de tiempo (15m/30m/1h/2h/3h); confirmación antes de borrar
+- [x] `ApiService` — `getAppUsage()`, `getAppRules()`, `createAppRule()`, `deleteAppRule()`, `setAppRuleActive()`
+- [x] `AppNavigator` — rutas `AppUsage` y `AppRules` añadidas
+- [x] `DeviceSummaryScreen` — accesos rápidos "📊 Tiempo apps" y "🚫 Reglas apps"
+
+#### Horarios + Bloqueo remoto + Capturas de pantalla ✅ (Sesión 12)
+
+##### Backend ✅
+- [x] Entidad `Schedule` — bitmask `activeDays` (bit 0=Dom … bit 6=Sáb), `startTime`/`endTime` como "HH:MM"; `isCurrentlyActive()` con soporte de rango medianoche
+- [x] Entidad `Screenshot` — `id`, `deviceId`, `filePath`, `sizeBytes`, `createdAt`; `create()` static factory
+- [x] `IScheduleRepository` — `save()`, `findByDevice()`, `findActiveByDevice()`, `findById()`, `delete()`, `setActive()`
+- [x] `IScreenshotRepository` — `save()`, `findByDevice(limit, offset)`, `findById()`, `delete()`
+- [x] `PostgreSQLScheduleRepository` — UPSERT ON CONFLICT (id)
+- [x] `PostgreSQLScreenshotRepository` — INSERT simple; `findByDevice` paginado con ORDER BY created_at DESC
+- [x] `ScheduleUseCase` — `create()`, `list()`, `delete()`, `setActive()`, `isDeviceLocked()` (comprueba todos los horarios activos)
+- [x] `ScreenshotUseCase` — `upload()` guarda JPEG en `/volumes/screenshots/{deviceId}/`; `getByDevice()` añade `fileUrl` con URL pública
+- [x] Ruta `POST /api/devices/:id/lock` — envía evento `device:lock` vía WebSocket al dispositivo
+- [x] Rutas `GET /api/schedules`, `GET /api/schedules/locked`, `POST /api/schedules`, `DELETE /api/schedules/:id`, `PATCH /api/schedules/:id/active`
+- [x] Rutas `POST /api/screenshots/upload` (multer, requireDeviceAuth), `GET /api/screenshots` (requireAuth)
+- [x] Archivos estáticos `/screenshots/*` servidos por Express desde `/volumes/screenshots`
+
+##### App Hijo ✅
+- [x] `ApiClient.kt` — añadidos `postJson(path, json)` y `getJson(path)` (usados por AppUsageSync y AppBlocker)
+- [x] `ScheduleChecker.kt` — refresca cache cada 15 min desde `/api/schedules`; comprueba cada minuto si aplica algún horario; llama `dpm.lockNow()` si Device Admin activo
+- [x] `ScreenshotCapture.kt` — `AccessibilityService.takeScreenshot()` (API 30+/Android 11+); convierte HardwareBuffer → Bitmap → JPEG 70% → upload multipart a `/api/screenshots/upload`; fallback silencioso en Android <11
+- [x] `MessageCaptureService.kt` — campo `ScreenshotCapture`; inicializado en `onServiceConnected`; método público `requestScreenshot()`; referencia estática `instance`
+- [x] `MonitorService.kt` — lanza `ScheduleChecker.startChecking()`; bucle periódico cada 5 min llama `MessageCaptureService.instance?.requestScreenshot()`; `webSocketManager.onLockDevice` wired a `dpm.lockNow()`
+- [x] `accessibility_service_config.xml` — `canTakeScreenshot="true"`; `packageNames=""` (monitoriza todas las apps para ScheduleChecker y AppBlocker)
+
+##### App Padre ✅
+- [x] `SchedulesScreen` — chips de días (Dom–Sáb) con bitmask toggle; inputs HH:MM; soporte visual de rango medianoche; lista con toggle activo/inactivo; confirmación antes de borrar
+- [x] `ScreenshotsScreen` — cuadrícula 3 columnas; paginación infinita por offset; modal visor pantalla completa con fecha y tamaño
+- [x] `ApiService` — `getSchedules()`, `createSchedule()`, `deleteSchedule()`, `setScheduleActive()`, `lockDevice()`, `getScreenshots()`
+- [x] `AppNavigator` — rutas `Schedules` y `Screenshots` añadidas
+- [x] `DeviceSummaryScreen` — botón rojo "🔒 Bloquear pantalla ahora" con confirmación; accesos rápidos "⏰ Horarios" → `Schedules` y "📱 Capturas" → `Screenshots`
+- [x] Tipos añadidos: `Schedule` (con `activeDays: number`), `Screenshot` (con `fileUrl: string`)
+
+#### Teams + Filtros de conversaciones + Ubicación por hora ✅ (Sesión 14)
+
+##### Backend ✅
+- [x] `Message.ts` — `MessageApp` ampliado con `'teams'`
+- [x] `IMessageRepository.ts` — `findConversations` acepta `ConversationFilter` (deviceId + app? + from? + to?) en lugar de solo `deviceId`
+- [x] `PostgreSQLMessageRepository.ts` — `findConversations` construye cláusulas WHERE dinámicas para `app`, `from`, `to`
+- [x] `GetMessagesUseCase.ts` — `getConversations` acepta y propaga filtros al repositorio
+- [x] `messageRoutes.ts` — enum `APP_ENUM` centralizado incluye `teams`; endpoint `GET /conversations` acepta `app`, `from`, `to` opcionales
+
+##### App Hijo ✅
+- [x] `MessageCaptureService.kt` — `PKG_TEAMS = "com.microsoft.teams"` añadido; `parseTeams()` implementado (busca por viewIds específicos de Teams, con fallback a recolección de todos los nodos de texto); Teams añadido a `MESSAGING_PKGS`
+
+##### App Padre ✅
+- [x] `types/index.ts` — `MessageApp` actualizado con `'teams'`
+- [x] `ApiService.ts` — `getConversations(deviceId, app?, from?, to?)` acepta filtros opcionales
+- [x] `ConversationsScreen` — barra de filtros por app (Todas / WA / TG / IG / SMS / Teams) + filtro de fecha (Hoy / Ayer / 7 días / Todo); recarga automática al cambiar cualquier filtro
+- [x] `MapScreen` — campo HH:MM + botón "¿Dónde estaba?"; busca el punto más cercano en la ruta cargada; anima el mapa al punto encontrado; muestra marcador amarillo con hora y dirección; panel de resultado con hora exacta y dirección
+
+#### Pulido final + optimización batería + contactos ✅ (Sesión 13)
+
+##### App Hijo ✅
+- [x] `PackageInstallReceiver.kt` — `BroadcastReceiver` que escucha `ACTION_PACKAGE_ADDED`; filtra self-installs y actualizaciones (`EXTRA_REPLACING`); obtiene etiqueta de la app con `PackageManager`; envía evento `new_app_installed` a `/api/alerts/events`
+- [x] `MonitorService.kt` — bucle heartbeat cada 5 min: renueva WakeLock (antes expiraba a los 10 min) y envía nivel de batería vía `ApiClient.sendHeartbeat()`
+- [x] `AndroidManifest.xml` — `PackageInstallReceiver` declarado con `intent-filter ACTION_PACKAGE_ADDED`; permiso `QUERY_ALL_PACKAGES` añadido para obtener etiquetas de apps en Android 11+
+
+##### App Padre ✅
+- [x] `ContactsScreen` — lista de contactos del hijo ordenada alfabéticamente; búsqueda en tiempo real por nombre o teléfono; avatar con iniciales y color consistente por nombre; muestra teléfonos y email; paginación pull-to-refresh
+- [x] `AppNavigator` — ruta `Contacts` añadida
+- [x] `DeviceSummaryScreen` — acceso rápido "👤 Contactos" → `Contacts`
 
 ---
 
-### FASE 6 — Documentación
-- [ ] Guía de instalación del servidor
-- [ ] Guía de instalación de la app hijo (con capturas)
-- [ ] Guía de uso de la app padre
-- [ ] API Reference
-- [ ] Esquema de base de datos documentado
+### FASE 6 — Documentación ✅
+- [x] Guía de instalación del servidor → `docs/01-instalacion-servidor.md`
+- [x] Guía de instalación de la app hijo → `docs/02-instalacion-app-hijo.md`
+- [x] Guía de uso de la app padre → `docs/03-guia-app-padre.md`
+- [x] API Reference → `docs/04-api-reference.md`
+- [x] Esquema de base de datos documentado → `docs/05-esquema-base-datos.md`
 
 ---
 
@@ -411,9 +472,11 @@ Requiere acceso físico UNA SOLA VEZ:
 | 8      | VPN local: historial web + detección/bloqueo VPNs externas          | ✅ Completada |
 | 9      | Alertas + palabras clave en tiempo real + SIM + notificaciones push | ✅ Completada |
 | 10     | Multi-hijo + panel resumen + geofencing                             | ✅ Completada |
-| 11     | Tiempo por app + bloqueo + límites + YouTube/TikTok history         | ⏳ Pendiente  |
-| 12     | Horarios + bloqueo remoto + capturas de pantalla automáticas        | ⏳ Pendiente  |
-| 13     | Pulido final + optimización batería + pruebas                       | ⏳ Pendiente  |
+| 11     | Tiempo por app + bloqueo + límites + YouTube/TikTok history         | ✅ Completada |
+| 12     | Horarios + bloqueo remoto + capturas de pantalla automáticas        | ✅ Completada |
+| 13     | Pulido final + optimización batería + detección app + contactos     | ✅ Completada |
+| 14     | Teams + filtros conversaciones por app/fecha + ubicación por hora   | ✅ Completada |
+| 15     | Documentación completa: servidor, app hijo, app padre, API, BD      | ✅ Completada |
 
 ---
 
@@ -429,26 +492,3 @@ Requiere acceso físico UNA SOLA VEZ:
 - Las palabras clave se evalúan en el servidor para no saturar el móvil del hijo
 - Las capturas de pantalla solo se suben por WiFi (salvo configuración contraria) para no gastar datos
 - Si instala una VPN externa, la detectamos y bloqueamos antes de que pueda usarla
-
-
-
-Ultima parte hecha 
-Update Todos
-
-- hecho Backend: entidades AppUsage y AppRule
-
-- hecho Backend: repositorios (ports + PostgreSQL)
-
-- hecho Backend: casos de uso AppUsageUseCase y AppRulesUseCase
-
-- hecho Backend: rutas appRoutes + container + Server
-
-- hecho App hijo: AppUsageSync.kt (UsageStatsManager)
-
-- hecho App hijo: AppBlocker + BlockedActivity + YouTube/TikTok + Manifest
-
-App padre: tipos, ApiService, AppUsageScreen, AppRulesScreen
-
-App padre: AppNavigator + DeviceSummaryScreen
-
-Actualizar PROYECTO.md sesión 11

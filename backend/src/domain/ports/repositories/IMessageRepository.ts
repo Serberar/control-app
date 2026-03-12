@@ -9,11 +9,18 @@ export interface MessageFilter {
   limit?: number
 }
 
+export interface ConversationFilter {
+  deviceId: string
+  app?: MessageApp
+  from?: Date
+  to?: Date
+}
+
 export interface IMessageRepository {
   save(message: Message): Promise<void>
   saveBatch(messages: Message[]): Promise<void>
   findByDevice(filter: MessageFilter): Promise<Message[]>
-  findConversations(deviceId: string): Promise<ConversationSummary[]>
+  findConversations(filter: ConversationFilter): Promise<ConversationSummary[]>
   countSince(deviceId: string, since: Date): Promise<number>
 }
 

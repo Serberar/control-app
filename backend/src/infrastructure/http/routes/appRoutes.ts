@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { AppUsageUseCase } from '../../../application/use-cases/appusage/AppUsageUseCase'
 import { AppRulesUseCase } from '../../../application/use-cases/appusage/AppRulesUseCase'
-import { requireAuth, requireDeviceAuthAuth } from '../middleware/authMiddleware'
+import { requireAuth, requireDeviceAuth } from '../middleware/authMiddleware'
 
 const usageItemSchema = z.object({
   packageName: z.string().min(1),

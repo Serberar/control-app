@@ -81,4 +81,12 @@ export class PostgreSQLAlertRepository implements IAlertRepository {
     )
     return parseInt(rows[0]?.count ?? '0', 10)
   }
+
+  async hasRecentAlert(deviceId: string, type: AlertType, since: Date): Promise<boolean> {
+    const rows = await query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM alerts WHERE device_id = $1 AND type = $2 AND created_at >= $3`,
+      [deviceId, type, since],
+    )
+    return parseInt(rows[0]?.count ?? '0', 10) > 0
+  }
 }

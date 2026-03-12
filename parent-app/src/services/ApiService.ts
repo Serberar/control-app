@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Device, LocationPoint, TokenPair, AuthUser, ConversationSummary, Message, MessageApp, CallLog, Contact, GalleryItem, UrlHistoryEntry, DomainStat, Alert, Geofence, DeviceSummary } from '../types'
+import { Device, LocationPoint, TokenPair, AuthUser, ConversationSummary, Message, MessageApp, CallLog, Contact, GalleryItem, UrlHistoryEntry, DomainStat, Alert, Geofence, DeviceSummary, AppUsageStat, AppRule, AppRuleType, Schedule, Screenshot } from '../types'
 
 const SERVER_URL = 'https://control.tudominio.com' // Cambiar por tu dominio
 
@@ -124,8 +124,15 @@ class ApiService {
 
   // ─── Mensajes ──────────────────────────────────────────────────────────
 
-  async getConversations(deviceId: string): Promise<ConversationSummary[]> {
-    const res = await this.client.get('/messages/conversations', { params: { deviceId } })
+  async getConversations(
+    deviceId: string,
+    app?: MessageApp,
+    from?: Date,
+    to?: Date,
+  ): Promise<ConversationSummary[]> {
+    const res = await this.client.get('/messages/conversations', {
+      params: { deviceId, app, from: from?.toISOString(), to: to?.toISOString() },
+    })
     return res.data.conversations
   }
 
@@ -252,6 +259,81 @@ class ApiService {
   async getDeviceSummary(deviceId: string): Promise<DeviceSummary> {
     const res = await this.client.get('/geofences/summary', { params: { deviceId } })
     return res.data.summary
+  }
+
+  // ─── Uso de apps ───────────────────────────────────────────────────────
+
+  async getAppUsage(deviceId: string, from: string, to: string): Promise<AppUsageStat[]> {
+    const res = await this.client.get('/apps/usage', { params: { deviceId, from, to } })
+    return res.data.usages
+  }
+
+  // ─── Reglas de bloqueo ─────────────────────────────────────────────────
+
+  async getAppRules(deviceId: string): Promise<AppRule[]> {
+    const res = await this.client.get('/apps/rules', { params: { deviceId } })
+    return res.data.rules
+  }
+
+  async createAppRule(
+    deviceId: string,
+    packageName: string,
+    appLabel: string,
+    ruleType: AppRuleType,
+    dailyLimitMinutes?: number,
+  ): Promise<AppRule> {
+    const res = await this.client.post('/apps/rules', {
+      deviceId, packageName, appLabel, ruleType, dailyLimitMinutes,
+    })
+    return res.data.rule
+  }
+
+  async deleteAppRule(id: string): Promise<void> {
+    await this.client.delete(`/apps/rules/${id}`)
+  }
+
+  async setAppRuleActive(id: string, active: boolean): Promise<void> {
+    await this.client.patch(`/apps/rules/${id}/active`, { active })
+  }
+
+  // ─── Horarios de bloqueo ───────────────────────────────────────────────
+
+  async getSchedules(deviceId: string): Promise<Schedule[]> {
+    const res = await this.client.get('/schedules', { params: { deviceId } })
+    return res.data.schedules
+  }
+
+  async createSchedule(
+    deviceId: string,
+    name: string,
+    activeDays: number,
+    startTime: string,
+    endTime: string,
+  ): Promise<Schedule> {
+    const res = await this.client.post('/schedules', { deviceId, name, activeDays, startTime, endTime })
+    return res.data.schedule
+  }
+
+  async deleteSchedule(id: string): Promise<void> {
+    await this.client.delete(`/schedules/${id}`)
+  }
+
+  async setScheduleActive(id: string, active: boolean): Promise<void> {
+    await this.client.patch(`/schedules/${id}/active`, { active })
+  }
+
+  // ─── Bloqueo remoto ────────────────────────────────────────────────────
+
+  async lockDevice(deviceId: string): Promise<{ sent: boolean }> {
+    const res = await this.client.post(`/devices/${deviceId}/lock`)
+    return res.data
+  }
+
+  // ─── Capturas de pantalla ──────────────────────────────────────────────
+
+  async getScreenshots(deviceId: string, limit = 50, offset = 0): Promise<Screenshot[]> {
+    const res = await this.client.get('/screenshots', { params: { deviceId, limit, offset } })
+    return res.data.screenshots
   }
 
   // Convierte la ruta relativa devuelta por el servidor en URL completa

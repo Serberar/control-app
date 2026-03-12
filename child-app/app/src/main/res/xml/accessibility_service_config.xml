@@ -4,7 +4,8 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:packageNames="com.whatsapp,org.telegram.messenger,com.instagram.android,com.whatsapp.w4b,com.google.android.youtube,com.zhiliaoapp.musically,com.ss.android.ugc.trill"
+    android:packageNames=""
     android:settingsActivity="" />

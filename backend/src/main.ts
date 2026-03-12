@@ -26,7 +26,10 @@ async function bootstrap(): Promise<void> {
   const container = buildContainer(wsServer)
   server.setupRoutes(container)
 
-  // 5. Arrancar
+  // 5. Arrancar jobs en background
+  container.inactivityCheckJob.start()
+
+  // 6. Arrancar servidor HTTP
   server.listen(port)
   console.log(`[Bootstrap] API lista   → http://localhost:${port}/api`)
   console.log(`[Bootstrap] WebSocket   → ws://localhost:${port}`)

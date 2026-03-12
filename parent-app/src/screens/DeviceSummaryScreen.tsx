@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -27,6 +28,7 @@ export default function DeviceSummaryScreen({ route }: Props) {
   const [summary, setSummary] = useState<DeviceSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [locking, setLocking] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -40,6 +42,31 @@ export default function DeviceSummaryScreen({ route }: Props) {
   }, [deviceId])
 
   useEffect(() => { load() }, [load])
+
+  const handleLock = () => {
+    Alert.alert(
+      'Bloquear dispositivo',
+      `¿Bloquear la pantalla de ${deviceName} ahora?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Bloquear',
+          style: 'destructive',
+          onPress: async () => {
+            setLocking(true)
+            try {
+              await api.lockDevice(deviceId)
+              Alert.alert('Listo', 'Orden de bloqueo enviada')
+            } catch {
+              Alert.alert('Error', 'No se pudo enviar la orden de bloqueo')
+            } finally {
+              setLocking(false)
+            }
+          },
+        },
+      ],
+    )
+  }
 
   const onRefresh = async () => {
     setRefreshing(true)
@@ -140,6 +167,18 @@ export default function DeviceSummaryScreen({ route }: Props) {
         </TouchableOpacity>
       </View>
 
+      {/* Bloqueo remoto */}
+      <TouchableOpacity
+        style={[styles.lockBtn, locking && styles.lockBtnDisabled]}
+        onPress={handleLock}
+        disabled={locking}
+      >
+        {locking
+          ? <ActivityIndicator color="#fff" />
+          : <Text style={styles.lockBtnText}>🔒 Bloquear pantalla ahora</Text>
+        }
+      </TouchableOpacity>
+
       {/* Accesos rápidos */}
       <View style={styles.actionsGrid}>
         {[
@@ -150,6 +189,11 @@ export default function DeviceSummaryScreen({ route }: Props) {
           { label: '🔔 Alertas', screen: 'Alerts' as const },
           { label: '🔤 Palabras clave', screen: 'Keywords' as const },
           { label: '📍 Geofencing', screen: 'Geofences' as const },
+          { label: '📊 Tiempo apps', screen: 'AppUsage' as const },
+          { label: '🚫 Reglas apps', screen: 'AppRules' as const },
+          { label: '⏰ Horarios', screen: 'Schedules' as const },
+          { label: '📱 Capturas', screen: 'Screenshots' as const },
+          { label: '👤 Contactos', screen: 'Contacts' as const },
         ].map(({ label, screen }) => (
           <TouchableOpacity
             key={screen}
@@ -221,4 +265,16 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   actionBtnText: { fontSize: 14, color: '#424242' },
+
+  lockBtn: {
+    backgroundColor: '#d32f2f',
+    borderRadius: 10,
+    margin: 12,
+    marginBottom: 0,
+    paddingVertical: 14,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  lockBtnDisabled: { backgroundColor: '#ef9a9a' },
+  lockBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 })

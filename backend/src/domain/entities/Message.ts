@@ -1,4 +1,4 @@
-export type MessageApp = 'whatsapp' | 'telegram' | 'instagram' | 'sms'
+export type MessageApp = 'whatsapp' | 'telegram' | 'instagram' | 'sms' | 'teams'
 export type MessageDirection = 'incoming' | 'outgoing'
 
 export interface MessageProps {

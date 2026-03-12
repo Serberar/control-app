@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { GetAlertsUseCase } from '../../../application/use-cases/alerts/GetAlertsUseCase'
 import { ManageKeywordsUseCase } from '../../../application/use-cases/alerts/ManageKeywordsUseCase'
 import { TriggerAlertUseCase } from '../../../application/use-cases/alerts/TriggerAlertUseCase'
+import { IAlertPreferencesRepository } from '../../../domain/ports/repositories/IAlertPreferencesRepository'
+import { AlertType } from '../../../domain/entities/Alert'
 import { requireAuth, requireDeviceAuth } from '../middleware/authMiddleware'
 
 const alertQuerySchema = z.object({
@@ -26,10 +28,23 @@ const fcmSchema = z.object({
   fcmToken: z.string().min(1),
 })
 
+const ALL_ALERT_TYPES: AlertType[] = [
+  'keyword_match', 'vpn_detected', 'sim_change', 'new_app_installed',
+  'geofence_exit', 'battery_low', 'inactivity', 'new_contact',
+]
+
+const preferencesSchema = z.object({
+  preferences: z.array(z.object({
+    alertType: z.enum(ALL_ALERT_TYPES as [AlertType, ...AlertType[]]),
+    enabled: z.boolean(),
+  })),
+})
+
 export function createAlertRoutes(
   getAlertsUseCase: GetAlertsUseCase,
   manageKeywordsUseCase: ManageKeywordsUseCase,
   triggerAlertUseCase: TriggerAlertUseCase,
+  alertPreferencesRepository: IAlertPreferencesRepository,
 ): Router {
   const router = Router()
 
@@ -142,6 +157,43 @@ export function createAlertRoutes(
       metadata: req.body,
     })
 
+    res.json({ ok: true })
+  })
+
+  // GET /api/alerts/preferences — padre obtiene preferencias de alerta del dispositivo
+  router.get('/preferences', requireAuth, async (req: Request, res: Response) => {
+    const deviceId = req.query.deviceId as string
+    if (!deviceId) {
+      res.status(400).json({ error: 'deviceId requerido' })
+      return
+    }
+
+    const saved = await alertPreferencesRepository.getAll(deviceId)
+    // Devuelve todos los tipos, completando con enabled=true los que no tienen fila
+    const savedMap = new Map(saved.map((p) => [p.alertType, p.enabled]))
+    const preferences = ALL_ALERT_TYPES.map((type) => ({
+      alertType: type,
+      enabled: savedMap.has(type) ? savedMap.get(type)! : true,
+    }))
+
+    res.json({ preferences })
+  })
+
+  // PUT /api/alerts/preferences — padre guarda preferencias de alerta
+  router.put('/preferences', requireAuth, async (req: Request, res: Response) => {
+    const deviceId = req.query.deviceId as string
+    if (!deviceId) {
+      res.status(400).json({ error: 'deviceId requerido' })
+      return
+    }
+
+    const parsed = preferencesSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message })
+      return
+    }
+
+    await alertPreferencesRepository.setAll(deviceId, parsed.data.preferences)
     res.json({ ok: true })
   })
 

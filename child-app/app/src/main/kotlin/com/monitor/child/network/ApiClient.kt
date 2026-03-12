@@ -127,5 +127,48 @@ class ApiClient(private val prefs: PreferencesManager) {
         }
     }
 
+    // ─── JSON con respuesta ────────────────────────────────────────────────
+
+    /** POST con JSON crudo (String) en lugar de objeto Kotlin */
+    suspend fun postJson(path: String, json: String): Boolean = withContext(Dispatchers.IO) {
+        val token = prefs.getDeviceToken() ?: return@withContext false
+        val serverUrl = prefs.getServerUrl()
+        try {
+            val request = Request.Builder()
+                .url("$serverUrl$path")
+                .header("Authorization", "Bearer $token")
+                .post(json.toRequestBody(JSON))
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val ok = response.isSuccessful
+            if (!ok) Log.w(TAG, "POST $path → ${response.code}")
+            response.close()
+            ok
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en postJson $path: ${e.message}")
+            false
+        }
+    }
+
+    /** GET que devuelve el cuerpo como JSONObject (vacío si error) */
+    suspend fun getJson(path: String): org.json.JSONObject = withContext(Dispatchers.IO) {
+        val token = prefs.getDeviceToken() ?: return@withContext org.json.JSONObject()
+        val serverUrl = prefs.getServerUrl()
+        try {
+            val request = Request.Builder()
+                .url("$serverUrl$path")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val bodyStr = response.body?.string() ?: "{}"
+            response.close()
+            org.json.JSONObject(bodyStr)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en getJson $path: ${e.message}")
+            org.json.JSONObject()
+        }
+    }
+
     fun getHttpClient(): OkHttpClient = httpClient
 }

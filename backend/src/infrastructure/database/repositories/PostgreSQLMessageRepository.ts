@@ -1,5 +1,5 @@
 import { Message, MessageApp, MessageDirection } from '../../../domain/entities/Message'
-import { IMessageRepository, MessageFilter, ConversationSummary } from '../../../domain/ports/repositories/IMessageRepository'
+import { IMessageRepository, MessageFilter, ConversationFilter, ConversationSummary } from '../../../domain/ports/repositories/IMessageRepository'
 import { query, queryOne } from '../PostgreSQLConnection'
 
 interface MessageRow {
@@ -101,7 +101,26 @@ export class PostgreSQLMessageRepository implements IMessageRepository {
     return rows.map(rowToMessage)
   }
 
-  async findConversations(deviceId: string): Promise<ConversationSummary[]> {
+  async findConversations(filter: ConversationFilter): Promise<ConversationSummary[]> {
+    const conditions = ['device_id = $1']
+    const params: unknown[] = [filter.deviceId]
+    let idx = 2
+
+    if (filter.app) {
+      conditions.push(`app = $${idx++}`)
+      params.push(filter.app)
+    }
+    if (filter.from) {
+      conditions.push(`timestamp >= $${idx++}`)
+      params.push(filter.from)
+    }
+    if (filter.to) {
+      conditions.push(`timestamp <= $${idx++}`)
+      params.push(filter.to)
+    }
+
+    const where = conditions.join(' AND ')
+
     const rows = await query<{
       app: MessageApp
       contact_name: string | null
@@ -122,10 +141,10 @@ export class PostgreSQLMessageRepository implements IMessageRepository {
          MAX(timestamp) AS last_message_at,
          COUNT(*) FILTER (WHERE direction = 'incoming') AS unread_count
        FROM messages m
-       WHERE device_id = $1
+       WHERE ${where}
        GROUP BY app, contact_name, contact_identifier, device_id
        ORDER BY last_message_at DESC`,
-      [deviceId],
+      params,
     )
 
     return rows.map((r) => ({

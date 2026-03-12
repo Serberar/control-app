@@ -63,6 +63,14 @@ export class PostgreSQLDeviceRepository implements IDeviceRepository {
     return rows.map(rowToDevice)
   }
 
+  async findAllActive(): Promise<Device[]> {
+    const rows = await query<DeviceRow>(
+      'SELECT * FROM devices WHERE is_active = true',
+      [],
+    )
+    return rows.map(rowToDevice)
+  }
+
   async save(device: Device): Promise<void> {
     await query(
       `INSERT INTO devices (
